@@ -376,7 +376,7 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
                 ) : (
                   <>
                     <MessageCircle className="w-4 h-4 mr-2" />
-                    TESTE IPHONE V3 🚀
+                    Enviar Pedido!
                   </>
                 )}
               </Button>
