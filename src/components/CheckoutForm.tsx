@@ -14,7 +14,7 @@ import { useCart } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
-const WHATSAPP_NUMBER = '5511999999999'; // Número do dono da pizzaria
+const WHATSAPP_NUMBER = '5583986696637'; // Número do dono da pizzaria
 
 const checkoutSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
