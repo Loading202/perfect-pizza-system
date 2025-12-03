@@ -76,12 +76,20 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
     }).format(price);
   };
 
-  const onSubmit = async (data: CheckoutFormData) => {
-    // TRAVA DE SEGURANÇA 1: Verifica se o carrinho tem itens
+  const onSubmit = async () => {
+    // ATENÇÃO: Usamos getValues() para garantir que pegamos o valor REAL do formulário neste exato momento
+    const finalData = form.getValues();
+    
+    // Debug no Console (Aperte F12 no navegador e veja se os dados aparecem aqui)
+    console.log("--- DADOS PARA ENVIO ---");
+    console.log("Cliente:", finalData.name);
+    console.log("Carrinho:", items);
+    console.log("Total:", totalPrice);
+
     if (items.length === 0 || totalPrice === 0) {
       toast({
-        title: "Carrinho Vazio",
-        description: "Adicione itens antes de finalizar.",
+        title: "Carrinho Vazio ou Zerado",
+        description: "Tente adicionar os itens novamente.",
         variant: "destructive",
       });
       return;
@@ -90,51 +98,29 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
     setLoading(true);
 
     try {
-      // ---------------------------------------------------------
-      // PASSO 1: GERAR O LINK DO WHATSAPP PRIMEIRO (Antes de tudo)
-      // Isso garante que os dados usados são os atuais, antes de qualquer limpeza
-      // ---------------------------------------------------------
+      // 1. PREPARAR A MENSAGEM (Síncrono, para não perder dados)
       const paymentLabels: Record<string, string> = {
         pix: 'PIX',
         card: 'Cartão',
         cash: 'Dinheiro',
       };
 
-      // Vamos usar um placeholder para o ID do pedido e substituir depois
-      // ou apenas usar "Gerando..." se der erro no banco, mas aqui garantimos o texto
-      let messageBase = `*NOVO PEDIDO - PIZZARIA BELLA*\n\n`;
-      // O ID será inserido depois
-      
-      let messageContent = `*Cliente:* ${data.name}\n`;
-      messageContent += `*Tel:* ${data.phone}\n\n`;
-      
-      messageContent += `*Itens:*\n`;
+      // Monta a lista de itens linha por linha
+      let itemsText = "";
       items.forEach(item => {
-        messageContent += `• ${item.quantity}x ${item.pizza.name}\n`;
+        itemsText += `• ${item.quantity}x ${item.pizza.name}\n`;
       });
 
-      messageContent += `\n*Total:* ${formatPrice(totalPrice)}\n`;
-      messageContent += `*Pagamento:* ${paymentLabels[data.paymentMethod]}\n`;
-      messageContent += `*Endereço:* ${data.address}`;
-      
-      if (data.notes) {
-        messageContent += `\n*Obs:* ${data.notes}`;
-      }
-      
-      messageContent += `\n\n_Pedido realizado via site_`;
-
-      // ---------------------------------------------------------
-      // PASSO 2: SALVAR NO BANCO DE DADOS
-      // ---------------------------------------------------------
+      // 2. SALVAR NO BANCO
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
-          customer_name: data.name,
-          customer_phone: data.phone,
-          customer_address: data.address,
+          customer_name: finalData.name,
+          customer_phone: finalData.phone,
+          customer_address: finalData.address,
           total_amount: totalPrice,
-          notes: data.notes || null,
-          payment_method: data.paymentMethod,
+          notes: finalData.notes || null,
+          payment_method: finalData.paymentMethod,
         })
         .select()
         .single();
@@ -154,23 +140,28 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
 
       if (itemsError) throw itemsError;
 
-      // ---------------------------------------------------------
-      // PASSO 3: FINALIZAR O LINK COM O ID GERADO
-      // ---------------------------------------------------------
+      // 3. GERAR LINK FINAL (Com o ID gerado)
       const orderCode = order.id.slice(0, 8).toUpperCase();
-      const finalMessage = `${messageBase}*Pedido:* #${orderCode}\n${messageContent}`;
+
+      // Montagem do texto final
+      const message = `*NOVO PEDIDO - PIZZARIA BELLA*\n\n` +
+        `*Pedido:* #${orderCode}\n` +
+        `*Cliente:* ${finalData.name}\n` +
+        `*Tel:* ${finalData.phone}\n\n` +
+        `*Itens:*\n${itemsText}\n` +
+        `*Total:* ${formatPrice(totalPrice)}\n` +
+        `*Pagamento:* ${paymentLabels[finalData.paymentMethod]}\n` +
+        `*Endereço:* ${finalData.address}\n` +
+        (finalData.notes ? `*Obs:* ${finalData.notes}\n` : '') +
+        `\n_Pedido realizado via site_`;
 
       const whatsappUrl = new URL('https://api.whatsapp.com/send');
       whatsappUrl.searchParams.append('phone', WHATSAPP_NUMBER);
-      whatsappUrl.searchParams.append('text', finalMessage);
+      whatsappUrl.searchParams.append('text', message);
       
       const finalLink = whatsappUrl.toString();
 
-      // ---------------------------------------------------------
-      // PASSO 4: LIMPEZA E REDIRECIONAMENTO
-      // ---------------------------------------------------------
-      
-      // Limpa carrinho SÓ AGORA
+      // 4. LIMPAR E REDIRECIONAR
       clearCart();
       form.reset();
 
@@ -188,14 +179,17 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
     } catch (error) {
       console.error('Error creating order:', error);
       toast({
-        title: "Erro ao fazer pedido",
-        description: "Tente novamente mais tarde.",
+        title: "Erro ao processar",
+        description: "Verifique sua conexão e tente novamente.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  // Wrapper simples para o handleSubmit chamar nossa função customizada
+  const handleFormSubmit = form.handleSubmit(() => onSubmit());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -206,13 +200,13 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
           </DialogTitle>
         </DialogHeader>
 
-        {/* Resumo do Pedido com Aviso se Vazio */}
+        {/* Resumo do Pedido */}
         <div className="bg-secondary/50 rounded-lg p-4 mb-6">
           <h3 className="font-semibold mb-3">Resumo do pedido</h3>
           {items.length === 0 ? (
             <div className="flex items-center gap-2 text-destructive mb-2">
               <AlertCircle className="w-4 h-4" />
-              <span className="text-sm font-medium">Seu carrinho está vazio!</span>
+              <span className="text-sm font-medium">Carrinho vazio (R$ 0,00)</span>
             </div>
           ) : (
             <div className="space-y-2 text-sm">
@@ -231,7 +225,7 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -351,9 +345,9 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
             <div className="bg-success/10 border border-success/30 rounded-lg p-4 flex items-start gap-3">
               <MessageCircle className="w-5 h-5 text-success mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-foreground">Confirmar e ir para WhatsApp</p>
+                <p className="font-medium text-foreground">Confirmar Pedido</p>
                 <p className="text-muted-foreground">
-                  Ao clicar abaixo, você será redirecionado automaticamente.
+                  Você será redirecionado para o WhatsApp com os dados preenchidos.
                 </p>
               </div>
             </div>
@@ -372,8 +366,7 @@ export function CheckoutForm({ open, onOpenChange }: CheckoutFormProps) {
                 type="submit" 
                 variant="hero" 
                 className="flex-1"
-                // Desabilita se estiver carregando OU se carrinho vazio
-                disabled={loading || items.length === 0} 
+                disabled={loading || items.length === 0}
               >
                 {loading ? (
                   <>
