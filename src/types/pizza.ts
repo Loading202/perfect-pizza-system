@@ -22,6 +22,8 @@ export interface CartItem {
   quantity: number;
 }
 
+export type PaymentMethod = 'pix' | 'card' | 'cash';
+
 export interface Order {
   id: string;
   customer_name: string;
@@ -30,6 +32,7 @@ export interface Order {
   total_amount: number;
   status: string;
   notes: string | null;
+  payment_method: PaymentMethod;
   created_at: string;
 }
 
