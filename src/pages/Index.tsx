@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CartProvider } from '@/contexts/CartContext';
+// REMOVIDO: import { CartProvider } from '@/contexts/CartContext'; <-- Não precisa importar aqui
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
 import { Menu } from '@/components/Menu';
@@ -39,12 +39,10 @@ function IndexContent() {
   );
 }
 
+// O componente Index agora é simples, apenas renderiza o conteúdo
+// O CartProvider já está lá no App.tsx, cobrindo tudo!
 const Index = () => {
-  return (
-    <CartProvider>
-      <IndexContent />
-    </CartProvider>
-  );
+  return <IndexContent />;
 };
 
 export default Index;
